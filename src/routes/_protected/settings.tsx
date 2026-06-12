@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UAParser } from 'ua-parser-js'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
+import { getRouter } from '../../router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -72,10 +73,6 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 function SettingsPage() {
   const { user, logout, checkSession, isLoading } = useAuth()
   const queryClient = useQueryClient()
-  
-  if (isLoading) {
-    return <DashboardSkeleton />
-  }
 
   // Profile Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false)
@@ -141,10 +138,15 @@ function SettingsPage() {
   // Fallback initial
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : user?.email.charAt(0).toUpperCase() || 'U'
 
+  if (isLoading) {
+    return <DashboardSkeleton />
+  }
+
   const onSaveProfile = async (data: ProfileFormValues) => {
     try {
-      await api.patch('/users/me', data)
-      await checkSession() // Refresh the context user
+      const response = await api.patch('/users/me', data)
+      // The PATCH returns the updated UserProfile. We can update the cache synchronously without a network hop!
+      queryClient.setQueryData(['user'], response.data)
       toast.success('Profile updated successfully!')
       setIsEditingProfile(false)
     } catch (err: any) {
@@ -194,8 +196,9 @@ function SettingsPage() {
     setIsDeleting(true)
     try {
       await api.delete('/users/me')
-      // The backend blacklists the token and removes cookies. We just need to trigger local cleanup.
-      await logout()
+      // The backend blacklists the token and removes cookies. We only need to clear local state.
+      queryClient.setQueryData(['user'], null)
+      getRouter().navigate({ to: '/login' })
     } catch (err) {
       console.error("Failed to delete account", err)
       toast.error("Failed to delete account.")
