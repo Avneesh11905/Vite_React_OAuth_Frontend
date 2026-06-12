@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UAParser } from 'ua-parser-js'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
@@ -70,6 +71,7 @@ type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 function SettingsPage() {
   const { user, logout, checkSession, isLoading } = useAuth()
+  const queryClient = useQueryClient()
   
   if (isLoading) {
     return <DashboardSkeleton />
@@ -78,9 +80,15 @@ function SettingsPage() {
   // Profile Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false)
 
-  // Sessions State
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [isLoadingSessions, setIsLoadingSessions] = useState(true)
+  // Sessions Query
+  const { data: sessions = [], isLoading: isLoadingSessions } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: async () => {
+      const response = await api.get('/auth/sessions');
+      return response.data as Session[];
+    },
+    enabled: !!user,
+  })
 
   // Delete State
   const [isDeleting, setIsDeleting] = useState(false)
@@ -109,30 +117,25 @@ function SettingsPage() {
         picture: user.picture || '',
         receive_updates: user.receive_updates || false,
       });
-      fetchSessions()
     }
   }, [user, profileForm])
 
-  const fetchSessions = async () => {
-    try {
-      const response = await api.get('/auth/sessions')
-      setSessions(response.data)
-    } catch (error) {
-      console.error("Failed to fetch sessions", error)
-    } finally {
-      setIsLoadingSessions(false)
-    }
-  }
-
-  const handleRevokeSession = async (familyId: string) => {
-    try {
+  const revokeMutation = useMutation({
+    mutationFn: async (familyId: string) => {
       await api.delete(`/auth/sessions/${familyId}`)
-      setSessions(prev => prev.filter(s => s.family_id !== familyId))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
       toast.success("Session revoked successfully.");
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Failed to revoke session", error)
       toast.error("Failed to revoke session.");
     }
+  })
+
+  const handleRevokeSession = (familyId: string) => {
+    revokeMutation.mutate(familyId)
   }
 
   // Fallback initial
