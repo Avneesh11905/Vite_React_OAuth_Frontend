@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
-import { api, API_URL } from "../lib/api";
+import { api, API_URL, setAccessToken, getCsrfToken } from "../lib/api";
+import { getRouter } from "../router";
 
 export type UserProfile = {
   id: string;
@@ -34,9 +35,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Proactively refresh the session to verify the HttpOnly refresh token cookie.
       // We use raw axios to avoid triggering our interceptor's auto-retry logic.
       const headers: Record<string, string> = {};
-      const csrfMatch = document.cookie.match(/csrf_token=([^;]+)/);
-      if (csrfMatch && csrfMatch[1]) {
-        headers["X-CSRF"] = csrfMatch[1];
+      const csrfToken = getCsrfToken();
+      if (csrfToken) {
+        headers["X-CSRF"] = csrfToken;
       }
 
       const refreshResponse = await axios.post(
@@ -49,9 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No active session");
       }
 
-      // Save the token in Axios memory for subsequent requests
+      // Save the token in our closure for subsequent requests
       const newAccessToken = refreshResponse.data.access_token;
-      api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+      setAccessToken(newAccessToken);
 
       // Now that we've verified the session, fetch the heavy user profile
       const response = await api.get("/users/me");
@@ -90,7 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // If we are not already on login or register, redirect
       if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-        window.location.href = `/login?redirectUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        getRouter().navigate({
+          to: '/login',
+          search: { redirectUrl: window.location.pathname + window.location.search } as any
+        });
       }
     }
   };
@@ -103,7 +107,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // We don't call backend logout here because the session is already dead
       if (typeof window !== 'undefined' && window.location.pathname !== '/' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
-        window.location.href = `/login?redirectUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        getRouter().navigate({
+          to: '/login',
+          search: { redirectUrl: window.location.pathname + window.location.search } as any
+        });
       }
     };
 

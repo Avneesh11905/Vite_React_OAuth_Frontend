@@ -1,5 +1,6 @@
 import axios from "axios";
 import { toast } from "sonner";
+import { getRouter } from "../router";
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
@@ -14,6 +15,20 @@ export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // Crucial for sending/receiving the HttpOnly Refresh Token
 });
+
+// Store the access token securely in a closure instead of global axios defaults
+let accessToken: string | null = null;
+
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+};
+
+// Robust CSRF token extraction
+export const getCsrfToken = (): string | null => {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
+  return match ? match.split('=')[1] : null;
+};
 
 // We need to keep track of whether we are currently refreshing the token
 // so we don't spam the /auth/refresh endpoint on simultaneous 401s.
@@ -38,11 +53,14 @@ const processQueue = (error: any, token: string | null = null) => {
 api.interceptors.request.use((config) => {
   // To protect against CSRF attacks, the backend sets a standard `csrf_token` cookie.
   // We extract it and send it as the X-CSRF-Token header.
-  if (typeof document !== 'undefined') {
-    const csrfMatch = document.cookie.match(/csrf_token=([^;]+)/);
-    if (csrfMatch && csrfMatch[1] && config.headers) {
-      config.headers["X-CSRF"] = csrfMatch[1];
-    }
+  const csrfToken = getCsrfToken();
+  if (csrfToken && config.headers) {
+    config.headers["X-CSRF"] = csrfToken;
+  }
+
+  // Inject the access token from our closure
+  if (accessToken && config.headers) {
+    config.headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   return config;
@@ -82,11 +100,9 @@ api.interceptors.response.use(
         // We use raw axios here to avoid infinite loops with the interceptors,
         // but we must manually extract and attach the CSRF token!
         const headers: Record<string, string> = {};
-        if (typeof document !== 'undefined') {
-          const csrfMatch = document.cookie.match(/csrf_token=([^;]+)/);
-          if (csrfMatch && csrfMatch[1]) {
-            headers["X-CSRF"] = csrfMatch[1];
-          }
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+          headers["X-CSRF"] = csrfToken;
         }
 
         // Silently request a new access token using the HttpOnly Refresh Token cookie
@@ -96,8 +112,8 @@ api.interceptors.response.use(
           { withCredentials: true, headers }
         );
 
-        // Save the new token in Axios memory
-        api.defaults.headers.common["Authorization"] = `Bearer ${data.access_token}`;
+        // Save the new token in our closure
+        setAccessToken(data.access_token);
         originalRequest.headers["Authorization"] = `Bearer ${data.access_token}`;
 
         // Process any other requests that were waiting for this token
@@ -111,6 +127,7 @@ api.interceptors.response.use(
         // We dispatch an event so AuthContext can cleanly log them out.
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+          getRouter().navigate({ to: '/login' });
         }
         return Promise.reject(refreshError);
       } finally {

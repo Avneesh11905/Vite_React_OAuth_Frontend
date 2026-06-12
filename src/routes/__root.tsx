@@ -24,6 +24,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
+        httpEquiv: 'Content-Security-Policy',
+        // Baseline CSP. In production, remove 'unsafe-inline' and 'unsafe-eval' from script-src if possible.
+        content: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000"
+      },
+      {
         title: 'FastAPI Auth Dashboard',
       },
     ],
