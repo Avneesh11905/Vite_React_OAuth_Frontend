@@ -4,11 +4,13 @@ import { api, API_URL } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { PasswordInput } from '../components/ui/password-input'
-import { Github, Loader2 } from 'lucide-react'
+import { Github } from 'lucide-react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../components/ui/form'
+import { isValidRedirect } from '../lib/utils'
+import { AuthSkeleton } from '../components/ui/auth-skeleton'
 
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" {...props}>
@@ -23,8 +25,6 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 type LoginSearch = {
   redirectUrl?: string
 }
-
-import { AuthSkeleton } from '../components/ui/auth-skeleton'
 
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): LoginSearch => {
@@ -61,14 +61,16 @@ function LoginPage() {
 
   // If the background session check determines they are logged in, bounce them!
   if (isAuthenticated) {
-    return <Navigate to={redirectUrl || '/settings'} />
+    const safeRedirect = isValidRedirect(redirectUrl) ? redirectUrl : '/settings';
+    return <Navigate to={safeRedirect} />
   }
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
       await api.post('/auth/login/local', data, { skipAuthRefresh: true });
       await login();
-      navigate({ to: redirectUrl || '/settings' });
+      const safeRedirect = isValidRedirect(redirectUrl) ? redirectUrl : '/settings';
+      navigate({ to: safeRedirect });
     } catch (err: any) {
       const errorMessage = err.response?.data?.detail || 'Failed to login. Please check your credentials.';
       // Display the error on both fields so Shadcn highlights them in red

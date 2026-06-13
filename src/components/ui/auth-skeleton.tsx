@@ -1,4 +1,3 @@
-import { Shield } from 'lucide-react'
 import { Skeleton } from './skeleton'
 
 export function AuthSkeleton() {

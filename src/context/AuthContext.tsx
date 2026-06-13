@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, getAccessToken, prefetchToken } from "../lib/api";
+import { toast } from "sonner";
 import { getRouter } from "../router";
 
 export type UserProfile = {
@@ -29,9 +30,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, isError } = useQuery({
     queryKey: ['user'],
     queryFn: async () => {
-      // Due to our Axios interceptor, if we lack an access token, this initial request
-      // will hit a 401. The interceptor will seamlessly catch it, hit /auth/refresh
-      // to validate the HttpOnly cookie, grab the access token, and retry this request.
+      // Eagerly fetch token if missing to avoid intentional 401
+      if (!getAccessToken()) {
+        try {
+          await prefetchToken();
+        } catch {
+          // prefetch failed, session is truly dead
+          return null;
+        }
+      }
+      
       const response = await api.get('/users/me');
       return response.data as UserProfile;
     },
@@ -54,9 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await api.post("/auth/logout");
-    } catch (e) {
-      console.error("Logout failed on server, continuing local cleanup", e);
-    } finally {
+      // Only clear local session if server confirms logout, because HttpOnly cookie remains otherwise.
       queryClient.setQueryData(['user'], null);
       
       if (typeof window !== 'undefined' && window.location.pathname !== '/') {
@@ -65,6 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           search: { redirectUrl: window.location.pathname + window.location.search } as any
         });
       }
+    } catch (e) {
+      console.error("Logout failed on server", e);
+      toast.error("Logout failed. Please try again or check your connection.");
     }
   };
 

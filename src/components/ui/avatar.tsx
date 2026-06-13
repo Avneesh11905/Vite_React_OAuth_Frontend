@@ -25,10 +25,15 @@ function Avatar({
 
 function AvatarImage({
   className,
+  src,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+  // Prevent XSS by stripping javascript: schemas from image src
+  const safeSrc = src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/')) ? src : undefined;
+  
   return (
     <AvatarPrimitive.Image
+      src={safeSrc}
       data-slot="avatar-image"
       className={cn("aspect-square size-full", className)}
       {...props}

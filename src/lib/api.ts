@@ -19,8 +19,45 @@ export const api = axios.create({
 // Store the access token securely in a closure instead of global axios defaults
 let accessToken: string | null = null;
 
+export const getAccessToken = () => accessToken;
+
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
+};
+
+export const prefetchToken = async (): Promise<string | null> => {
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      failedQueue.push({ resolve, reject });
+    });
+  }
+
+  isRefreshing = true;
+  try {
+    const headers: Record<string, string> = {};
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers["X-CSRF"] = csrfToken;
+    }
+
+    const { data } = await axios.post(
+      `${API_URL}/auth/refresh`,
+      {},
+      { withCredentials: true, headers }
+    );
+
+    setAccessToken(data.access_token);
+    processQueue(null, data.access_token);
+    return data.access_token;
+  } catch (refreshError) {
+    processQueue(refreshError, null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
+    throw refreshError;
+  } finally {
+    isRefreshing = false;
+  }
 };
 
 // Robust CSRF token extraction
@@ -34,7 +71,7 @@ export const getCsrfToken = (): string | null => {
 // so we don't spam the /auth/refresh endpoint on simultaneous 401s.
 let isRefreshing = false;
 let failedQueue: {
-  resolve: (value: unknown) => void;
+  resolve: (value: string | null) => void;
   reject: (reason?: any) => void;
 }[] = [];
 

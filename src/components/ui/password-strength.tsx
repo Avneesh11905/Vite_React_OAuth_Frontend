@@ -40,7 +40,7 @@ export function PasswordStrength({
       <PopoverTrigger asChild>
         <div 
           onFocus={() => setIsOpen(true)} 
-          onBlur={(e) => {
+          onBlur={() => {
             // Give a tiny delay so clicks inside popover don't instantly close it if needed,
             // but for a purely visual tooltip, immediate close is fine.
             setIsOpen(false);

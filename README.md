@@ -17,7 +17,9 @@ This frontend implements a rigorous, production-grade security and state managem
 - **In-Memory Token Storage**: Access Tokens are strictly held in a closure variable in `src/lib/api.ts` (instead of global Axios defaults or localStorage) to neutralize XSS vulnerabilities and prevent token exposure.
 - **Silent Token Rotation**: Utilizes an advanced Axios interceptor that catches `401 Unauthorized` responses and automatically hits the `POST /auth/refresh` endpoint. The backend validates the HttpOnly cookie, returns a new Access Token, and the interceptor seamlessly retries the failed request without disrupting the user.
 - **CSRF Protection**: Safely extracts the `csrf_token` cookie and attaches it as an `X-CSRF` header to all mutating requests.
-- **Content Security Policy (CSP)**: A baseline `<meta>` CSP is configured in `__root.tsx` to mitigate XSS globally (developers should harden this further for production).
+- **Open Redirect Prevention**: Login redirects enforce strict same-origin validation (`isValidRedirect`) to neutralize malicious phishing links.
+- **Content Security Policy (CSP) & XSS Defenses**: A baseline `<meta>` CSP is configured to mitigate XSS globally, and strict HTTP protocol validation is applied to dynamic user content like avatars.
+- **Eager State Synchronization**: Implements token prefetching to seamlessly align the React context state with the server session, entirely preventing visual flashes or intentional `401 Unauthorized` requests during the initial page load.
 - **Centralized API Handling**: A globally configured Axios instance (`src/lib/api.ts`) manages all backend communication, error toasting (via Sonner), and token rotation seamlessly.
 
 ## 🛣️ Routing Architecture (TanStack Router)
