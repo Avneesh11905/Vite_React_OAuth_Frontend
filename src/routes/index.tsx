@@ -1,18 +1,68 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { KeyRound, Smartphone, Settings, Github, Mail, ShieldCheck, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { api } from '../lib/api'
+import { getRouter } from '../router'
+import { toast } from 'sonner'
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, 
+  AlertDialogTitle
+} from '../components/ui/alert-dialog'
 import { useAuth } from '../context/AuthContext'
 import { Navbar } from '../components/navbar'
 import { HomeSkeleton } from '../components/home-skeleton'
 
-export const Route = createFileRoute('/')({ component: Home })
+export const Route = createFileRoute('/')({ 
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      new_user: search.new_user === 'true' || search.new_user === true,
+    }
+  },
+  component: Home 
+})
 
 function Home() {
   const { isAuthenticated, isLoading } = useAuth()
+  const search = Route.useSearch()
+  const queryClient = useQueryClient()
+  const [showOnboarding, setShowOnboarding] = useState(search.new_user || false)
+
+  const handleMarketingDecision = async (optIn: boolean) => {
+    if (optIn) {
+      try {
+        const response = await api.patch('/users/me', { receive_updates: true })
+        queryClient.setQueryData(['user'], response.data)
+        toast.success("Marketing preferences saved.");
+      } catch (e) {
+        console.error("Failed to set marketing preference", e);
+      }
+    }
+    setShowOnboarding(false);
+    getRouter().navigate({ search: { new_user: undefined } })
+  }
 
   if (isLoading) return <HomeSkeleton />
 
   return (
     <div className="min-h-screen bg-slate-50 selection:bg-indigo-100 selection:text-indigo-900 flex flex-col relative overflow-hidden">
+      <AlertDialog open={showOnboarding} onOpenChange={setShowOnboarding}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Welcome to the Network! 🎉</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your account has been successfully created. Would you like to receive occasional emails about new features, updates, and best practices?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => handleMarketingDecision(false)}>Not right now</AlertDialogCancel>
+            <AlertDialogAction onClick={() => handleMarketingDecision(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              Yes, keep me updated!
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Premium Background Mesh */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-400/20 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-400/20 blur-[120px] pointer-events-none" />

@@ -50,7 +50,7 @@ function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1)
   const [registeredEmail, setRegisteredEmail] = useState('')
   
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, login } = useAuth()
   const navigate = useNavigate()
 
   const registerForm = useForm<RegisterFormValues>({
@@ -99,8 +99,11 @@ function RegisterPage() {
   const onVerify = async (data: VerifyFormValues) => {
     try {
       const res = await api.post('/auth/verify-email', { email: registeredEmail, otp: data.otp });
-      toast.success(res.data?.message || 'Email verified successfully! You can now log in.');
-      navigate({ to: '/login' });
+      toast.success(res.data?.message || 'Email verified successfully!');
+      
+      await login();
+      
+      navigate({ to: '/', search: { new_user: true } as any });
     } catch (err: any) {
       verifyForm.setError('otp', {
         type: 'manual',
